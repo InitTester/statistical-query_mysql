@@ -126,21 +126,20 @@ ORDER BY MAX(A.sum_native_cnt) DESC;
 # 9. 경기도 김포시의 관광지 중 각 년도 별 평균 내국인 방문객 수가 높은 1~3위를 조회하라
 
 WITH RankedVisits AS (
-    SELECT 
-        b.prvn_name,
-        c.distc_name,
-        d.attrc_name,
-        YEAR(a.basis_date) AS year,
-        ROUND(AVG(a.native_cnt)) AS 방문객수,
-        ROW_NUMBER() OVER (PARTITION BY YEAR(a.basis_date) ORDER BY SUM(a.native_cnt) DESC) AS rn
-    FROM figure a 
-    INNER JOIN province b ON a.prvn_cd = b.prvn_cd
-    INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
-    INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
-    WHERE b.prvn_name = '경기도'
-    AND c.distc_name = '김포시'
-    GROUP BY b.prvn_name, c.distc_name, d.attrc_name, YEAR(a.basis_date)
-)
+    SELECT b.prvn_name,
+	       c.distc_name,
+	       d.attrc_name,
+	       YEAR(a.basis_date) AS year,
+	       ROUND(AVG(a.native_cnt)) AS 방문객수,
+	       ROW_NUMBER() OVER (PARTITION BY YEAR(a.basis_date) ORDER BY SUM(a.native_cnt) DESC) AS rn
+	   FROM figure a 
+	   INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+	   INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+	   INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+	   WHERE b.prvn_name = '경기도'
+	   AND c.distc_name = '김포시'
+	   GROUP BY b.prvn_name, c.distc_name, d.attrc_name, YEAR(a.basis_date)
+	)
 SELECT
     prvn_name AS '도/광역시',
     distc_name AS '시/군/구',
@@ -153,8 +152,81 @@ ORDER BY year, 방문객수 DESC;
 
 # 10. 경기도 과천시 관광지의 각 년도 별 평균 내국인 방문객 수를 조회하라
 
+SELECT CONCAT(b.prvn_name,' ', c.distc_name,' ', d.attrc_name) '경기도 과천시 광광지',
+       YEAR(a.basis_date) AS 년도,
+       ROUND(AVG(a.native_cnt)) AS 방문객수
+FROM figure a 
+INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+WHERE b.prvn_name = '경기도'
+AND c.distc_name = '과천시'
+GROUP BY CONCAT(b.prvn_name,' ', c.distc_name,' ', d.attrc_name),YEAR(a.basis_date)
+ORDER BY YEAR(a.basis_date), ROUND(AVG(a.native_cnt)) DESC;
 
+# 11. [10]의 결과를 시계열로 표시하라.
 
+SELECT CONCAT(A.prvn_name, ' ', A.distc_name, ' ', A.attrc_name) AS '경기도 과천시 관광지',
+       MAX(CASE WHEN A.year = 2010 THEN A.avg_native_cnt ELSE 0 END) AS '2010',
+       MAX(CASE WHEN A.year = 2011 THEN A.avg_native_cnt ELSE 0 END) AS '2011',
+       MAX(CASE WHEN A.year = 2012 THEN A.avg_native_cnt ELSE 0 END) AS '2012',
+       MAX(CASE WHEN A.year = 2013 THEN A.avg_native_cnt ELSE 0 END) AS '2013',
+       MAX(CASE WHEN A.year = 2014 THEN A.avg_native_cnt ELSE 0 END) AS '2014',
+       MAX(CASE WHEN A.year = 2015 THEN A.avg_native_cnt ELSE 0 END) AS '2015',
+       MAX(CASE WHEN A.year = 2016 THEN A.avg_native_cnt ELSE 0 END) AS '2016',
+       MAX(CASE WHEN A.year = 2017 THEN A.avg_native_cnt ELSE 0 END) AS '2017'
+FROM (
+    SELECT b.prvn_name,
+           c.distc_name,
+           d.attrc_name,
+           YEAR(a.basis_date) AS year,
+           ROUND(AVG(a.native_cnt)) AS avg_native_cnt
+    FROM figure a
+    INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+    INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+    INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+    WHERE b.prvn_name = '경기도'
+      AND c.distc_name = '과천시'
+    GROUP BY CONCAT(b.prvn_name, ' ', c.distc_name, ' ', d.attrc_name), YEAR(a.basis_date)
+) A
+GROUP BY CONCAT(A.prvn_name, ' ', A.distc_name, ' ', A.attrc_name);
+
+# 12. 2017년, 경기도 각 관광지의 분기별 평균 내국인 방문객 수를 시계열로 표현하라
+SELECT CONCAT(A.prvn_name, ' ', A.distc_name) AS '경기도 시/군별',
+       MAX(CASE WHEN A.QUART = 1 THEN A.avg_native_cnt ELSE 0 END) AS '1분기',
+       MAX(CASE WHEN A.QUART = 2 THEN A.avg_native_cnt ELSE 0 END) AS '2분기',
+       MAX(CASE WHEN A.QUART = 3 THEN A.avg_native_cnt ELSE 0 END) AS '3분기',
+       MAX(CASE WHEN A.QUART = 4 THEN A.avg_native_cnt ELSE 0 END) AS '4분기'
+FROM (
+    SELECT b.prvn_name,
+           c.distc_name,
+           QUARTER(a.basis_date) AS QUART,
+           ROUND(AVG(a.native_cnt)) AS avg_native_cnt
+    FROM figure a
+    INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+    INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+    INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+    WHERE b.prvn_name = '경기도'
+    AND YEAR(a.basis_date) = '2017'
+    GROUP BY CONCAT(b.prvn_name, ' ', c.distc_name), QUARTER(a.basis_date)
+) A
+GROUP BY CONCAT(A.prvn_name, ' ', A.distc_name);
+
+# 13. 2017년, 경기도 각 관광지 별 방문객이 가장 많이 방문한 월의 방문객 수와 가장 적게 방문한 월의 방문객 수 차이를 구하라.
+
+SELECT b.prvn_name AS '도/광역시',
+	   c.distc_name AS '시/군/구',
+	   d.attrc_name AS '관광지',
+       MAX(a.native_cnt) - MIN(a.native_cnt) AS '월방문객 (많은수 - 적은수) 총합'
+FROM figure a
+INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+WHERE b.prvn_name = '경기도'
+AND YEAR(a.basis_date) = '2017'
+GROUP BY b.prvn_name, c.distc_name, d.attrc_name;
+
+# 14. 2017년, 경기도 각 관광지 별 가장 많이 방문한 월과 방문객 수, 가장 적게 방문한 월과 방문객 수를 구하라.
 
 
 
