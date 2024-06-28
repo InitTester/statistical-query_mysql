@@ -224,23 +224,92 @@ INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
 INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
 WHERE b.prvn_name = '경기도'
 AND YEAR(a.basis_date) = '2017'
-GROUP BY b.prvn_name, c.distc_name, d.attrc_name;
+GROUP BY b.prvn_name, c.distc_name, d.attrc_name
+ORDER BY b.prvn_name, c.distc_name, d.attrc_name;
 
 # 14. 2017년, 경기도 각 관광지 별 가장 많이 방문한 월과 방문객 수, 가장 적게 방문한 월과 방문객 수를 구하라.
 
+SELECT CONCAT(b.prvn_name, ' ', c.distc_name, ' ', d.attrc_name) AS '경기도 시/군/구별 관광지', 
+       (SELECT CASE WHEN native_cnt = 0 THEN CONCAT(MAX(SUBSTRING(basis_date, 1, 6)) - 1) 
+                    ELSE MAX(SUBSTRING(basis_date, 1, 6)) END
+        FROM figure 
+        WHERE prvn_cd = a.prvn_cd 
+        AND distc_cd = a.distc_cd
+        AND attrc_cd = a.attrc_cd 
+        AND native_cnt = MAX(a.native_cnt) 
+        AND YEAR(basis_date) = 2017) '2017년 월별 최대인원',
+       MAX(a.native_cnt) '2017년 월별 최대인원',
+      (SELECT CASE WHEN native_cnt = 0 THEN CONCAT(MIN(SUBSTRING(basis_date, 1, 6)) + 1)
+                    ELSE MIN(SUBSTRING(basis_date, 1, 6)) END
+       FROM figure 
+       WHERE prvn_cd = a.prvn_cd 
+       AND distc_cd = a.distc_cd
+       AND attrc_cd = a.attrc_cd 
+       AND native_cnt = MIN(a.native_cnt) 
+       AND YEAR(basis_date) = 2017) '2017년 월별 최소인원',
+       MIN(a.native_cnt) '2017년 월별 최소인원'
+FROM figure a
+INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+WHERE b.prvn_name = '경기도'
+AND YEAR(a.basis_date) = '2017'
+GROUP BY b.prvn_name, c.distc_name, d.attrc_name, a.prvn_cd, a.distc_cd, a.attrc_cd
+ORDER BY b.prvn_name, c.distc_name, d.attrc_name;
 
+-- 인원이 0 인 경우 월이 제대로 가져와 지지 않는 문제
 
+# 15. 각 도의 시/군/구를 방문한 연도별 평균 내국인 방문객 수를 시계열로 표현하라
 
+SELECT CONCAT(A.prvn_name,' ', A.distc_name) '각 도의 시/군/구',
+       MAX(CASE WHEN A.basis_date = 2010 THEN A.native_cnt ELSE 0 END) AS '2010',
+       MAX(CASE WHEN A.basis_date = 2011 THEN A.native_cnt ELSE 0 END) AS '2011',
+       MAX(CASE WHEN A.basis_date = 2012 THEN A.native_cnt ELSE 0 END) AS '2012',
+       MAX(CASE WHEN A.basis_date = 2013 THEN A.native_cnt ELSE 0 END) AS '2013',
+       MAX(CASE WHEN A.basis_date = 2014 THEN A.native_cnt ELSE 0 END) AS '2014',
+       MAX(CASE WHEN A.basis_date = 2015 THEN A.native_cnt ELSE 0 END) AS '2015',
+       MAX(CASE WHEN A.basis_date = 2016 THEN A.native_cnt ELSE 0 END) AS '2016',
+       MAX(CASE WHEN A.basis_date = 2017 THEN A.native_cnt ELSE 0 END) AS '2017'
+FROM (       
+SELECT b.prvn_name,
+	   c.distc_name,
+	   YEAR(a.basis_date) AS basis_date,
+	   ROUND(AVG(a.native_cnt))	AS native_cnt   
+FROM figure a
+INNER JOIN province b ON a.prvn_cd = b.prvn_cd
+INNER JOIN district c ON b.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd
+INNER JOIN attraction d ON a.prvn_cd = d.prvn_cd AND a.distc_cd = d.distc_cd AND a.attrc_cd = d.attrc_cd
+GROUP BY b.prvn_name, c.distc_name, YEAR(a.basis_date)) A
+GROUP BY A.prvn_name, A.distc_name
+ORDER BY A.prvn_name, A.distc_name;
 
+# 16. 각 도의 시/군/구를 방문한 내국인 방문객 합계를 이용해 연도별 각 도의 방문객 최대 도시, 최저 도시를 조회하라.
 
-SELECT * FROM province;
-
-SELECT * FROM district;
-
-SELECT * FROM attraction;
-
-SELECT * FROM figure;
-
-SELECT * FROM org_data;
-
-
+WITH YearVisitsCity AS (
+	SELECT b.prvn_name,
+		   a.prvn_cd,
+		   c.distc_name,
+		   a.distc_cd,  	   
+		   YEAR(a.basis_date) year,	  
+	  	   SUM(a.native_cnt) cnt 
+	FROM figure a
+	LEFT JOIN province b ON a.prvn_cd = b.prvn_cd 
+	LEFT JOIN district c ON a.prvn_cd = c.prvn_cd AND a.distc_cd = c.distc_cd 
+	WHERE b.prvn_name LIKE '%도%'
+	GROUP BY a.prvn_cd, a.distc_cd, YEAR(a.basis_date))
+SELECT a.prvn_name,
+	   a.year,
+	   MAX(a.cnt) max_cnt,
+	   (SELECT distc_name
+	   	FROM YearVisitsCity 
+	   	WHERE prvn_name = a.prvn_name
+	   	AND year = a.year
+	   	AND cnt = MAX(a.cnt)) max_distNm,
+	   MIN(a.cnt) min_cnt,
+   	   (SELECT distc_name
+	   	FROM YearVisitsCity 
+	   	WHERE prvn_name = a.prvn_name
+	   	AND year = a.year
+	   	AND cnt = MIN(a.cnt)) min_distNm
+FROM YearVisitsCity a
+GROUP BY a.prvn_name, a.year;
