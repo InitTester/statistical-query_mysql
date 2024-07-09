@@ -535,3 +535,52 @@ FROM (
 ) A
 LEFT JOIN ranked B ON A.prvn_name = B.prvn_name AND A.year = B.year AND A.min_rn = B.rn
 LEFT JOIN ranked C ON A.prvn_name = C.prvn_name AND A.year = C.year AND A.max_rn = C.rn;
+
+
+-- 16. 각 도의 시/군/구를 방문한 내국인 방문객 합계를 년도별 각 도의 방문객 최대 도시, 최저도시를 조회
+SELECT A.prvn_name, A.year, 
+       MAX(IF(A.rank = 1, A.distc_name, 0)) AS '방문객 최대',
+       MAX(IF(A.rank = B.max_rank, A.distc_name, 0)) AS '방문객 최저'
+  FROM (
+		-- 각 년도별 도시 방문객 합계를 구한 뒤 순위를 구함. (방문객 높으면 1위, 내림차순)
+		SELECT prvn_name, distc_name,
+			   (CASE @year WHEN year THEN @rnum:=@rnum+1 ELSE @rnum:=1 END) AS rank,
+			   (@year:=year) as year
+		  FROM (
+			SELECT p.prvn_name, d.distc_name, SUBSTR(f.basis_date, 1, 4) as year, ROUND(SUM(f.native_cnt)) AS figure
+			  FROM province p
+			  JOIN district d ON p.prvn_cd = d.prvn_cd
+			  JOIN attraction a ON d.prvn_cd = a.prvn_cd AND d.distc_cd = a.distc_cd
+			  JOIN figure f ON f.prvn_cd = a.prvn_cd AND f.distc_cd = a.distc_cd AND f.attrc_cd = a.attrc_cd
+			WHERE 1=1
+			GROUP BY p.prvn_name, d.distc_name, SUBSTR(f.basis_date, 1, 4)
+			ORDER BY p.prvn_name, SUBSTR(f.basis_date, 1, 4), figure DESC, d.distc_name
+		  ) A,
+		  (SELECT @rnum:=0, @year:=0 FROM DUAL) B
+  ) A,
+  (   
+		-- 각 년도별 최저 방문 순위 구하기 (즉, rank가 제일 높은 것...)
+		SELECT prvn_name, year, MAX(RANK) as max_rank
+		  FROM (
+			SELECT prvn_name, distc_name,
+				   (CASE @year WHEN year THEN @rnum:=@rnum+1 ELSE @rnum:=1 END) AS rank,
+				   (@year:=year) as year
+			  FROM (
+				SELECT p.prvn_name, d.distc_name, SUBSTR(f.basis_date, 1, 4) as year, ROUND(SUM(f.native_cnt)) AS figure
+				  FROM province p
+				  JOIN district d ON p.prvn_cd = d.prvn_cd
+				  JOIN attraction a ON d.prvn_cd = a.prvn_cd AND d.distc_cd = a.distc_cd
+				  JOIN figure f ON f.prvn_cd = a.prvn_cd AND f.distc_cd = a.distc_cd AND f.attrc_cd = a.attrc_cd
+				WHERE 1=1
+				GROUP BY p.prvn_name, d.distc_name, SUBSTR(f.basis_date, 1, 4)
+				ORDER BY p.prvn_name, SUBSTR(f.basis_date, 1, 4), figure DESC, d.distc_name
+			) A,
+			(SELECT @rnum:=0, @year:=0 FROM DUAL) B
+		) A
+		GROUP BY prvn_name, year
+  ) B
+  WHERE A.prvn_name = B.prvn_name AND A.year = B.year AND A.rank = B.Max_rank OR A.rank = 1
+GROUP BY A.prvn_name, A.year;
+;
+
+```
